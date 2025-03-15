@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using mvc_agile_process.Data;
 
@@ -11,9 +12,11 @@ using mvc_agile_process.Data;
 namespace mvc_agile_process.Migrations
 {
     [DbContext(typeof(mvc_agile_processContext))]
-    partial class mvc_agile_processContextModelSnapshot : ModelSnapshot
+    [Migration("20250315195542_Rating")]
+    partial class Rating
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
