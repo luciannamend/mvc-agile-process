@@ -20,32 +20,6 @@ namespace mvc_agile_process.Controllers
         }
 
         // GET: Movies
-        //public async Task<IActionResult> Index()
-        //{
-        //    return View(await _context.Movie.ToListAsync());
-        //}
-
-        //// GET: Movies => search by string
-        //public async Task<IActionResult> Index(string searchString)
-        //{
-        //    if (_context.Movie == null)
-        //    {
-        //        return Problem("Entity set 'mvc_agile_processContext.Movie'  is null.");
-        //    }
-
-        //    // creates a LINQ query to select the movies
-        //    var movies = from m in _context.Movie
-        //                 select m;
-
-        //    if (!String.IsNullOrEmpty(searchString))
-        //    {
-        //        movies = movies.Where(s => s.Title!.ToUpper().Contains(searchString.ToUpper()));
-        //    }
-
-        //    return View(await movies.ToListAsync());
-        //}
-
-        // GET: Movies
         public async Task<IActionResult> Index(string movieGenre, string searchString)
         {
             if (_context.Movie == null)
@@ -85,25 +59,6 @@ namespace mvc_agile_process.Controllers
             return "From [HttpPost]Index: filter on " + searchString;
         }
 
-        //// GET: Movies => search by id
-        //public async Task<IActionResult> Index(string id)
-        //{
-        //    if (_context.Movie == null)
-        //    {
-        //        return Problem("Entity set 'mvc_agile_processContext.Movie'  is null.");
-        //    }
-
-        //    var movies = from m in _context.Movie
-        //                 select m;
-
-        //    if (!String.IsNullOrEmpty(id))
-        //    {
-        //        movies = movies.Where(s => s.Title!.ToUpper().Contains(id.ToUpper()));
-        //    }
-
-        //    return View(await movies.ToListAsync());
-        //}
-
         // GET: Movies/Details/5
         public async Task<IActionResult> Details(int? id)
         {
@@ -129,8 +84,6 @@ namespace mvc_agile_process.Controllers
         }
 
         // POST: Movies/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("Id,Title,ReleaseDate,Genre,Price,Rating")] Movie movie)
@@ -161,8 +114,6 @@ namespace mvc_agile_process.Controllers
         }
 
         // POST: Movies/Edit/5  
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind("Id,Title,ReleaseDate,Genre,Price,Rating")] Movie movie)
