@@ -13,11 +13,11 @@
     <div class="row justify-content-center mt-4">
         <div class="col-md-4 mb-3">
             @* Placeholder button *@
-            <a href="" class="btn btn-primary btn-lg btn-block">View All Movies</a>
+            <a class="btn btn-primary btn-lg btn-block" asp-area="" asp-controller="Movies">View All Movies</a>
         </div>
         <div class="col-md-4 mb-3">
-             @* Placeholder button *@
-            <a href="" class="btn btn-success btn-lg btn-block">Add New Movie</a>
+             @* Add new movie button *@
+            <a class="btn btn-success btn-lg btn-block" asp-area="" asp-controller="Movies" asp-action="Create">Add New Movie</a>
         </div>
     </div>
 
