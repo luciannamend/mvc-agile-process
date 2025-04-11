@@ -7,6 +7,8 @@ pool:
     - agent.name -equals Group15Agent
 
 variables:
+  solution: 'mvc-agile-process.sln'
+  buildPlatform: 'Any CPU'
   buildConfiguration: 'Release'
   projectName: 'MVC Movie Web App'
   sonarProjectKey: 'GroupProject'
@@ -20,7 +22,7 @@ stages:
   - job: BuildJob
     displayName: 'Build and Test'
     steps:
-    # Use .NET Core SDK
+    # Install and configure the required .NET SDK version
     - task: UseDotNet@2
       displayName: 'Use .NET 8.0 SDK'
       inputs:
@@ -28,59 +30,63 @@ stages:
         version: '8.0.100'
         installationPath: '$(Agent.ToolsDirectory)/dotnet'
 
-    # Update SonarScanner for .NET
+    # Install NuGet tools needed for package restore
+    - task: NuGetToolInstaller@1
+      displayName: 'Install NuGet Tool'
+      
+    # Restore NuGet packages for the solution
+    - task: NuGetCommand@2
+      displayName: 'Restore NuGet Packages'
+      inputs:
+        restoreSolution: '$(solution)'
+        feedsToUse: 'select'
+
+    # Install SonarScanner for code quality analysis
     - script: |
         dotnet tool update --global dotnet-sonarscanner
-      displayName: 'Update SonarScanner for .NET'
+      displayName: 'Install SonarScanner for .NET'
       continueOnError: true
 
-    # Begin SonarQube Analysis
+    # Initialize SonarQube analysis before build
     - script: |
-        dotnet sonarscanner begin /k:"$(sonarProjectKey)" /n:"$(sonarProjectName)" /d:sonar.host.url="http://localhost:9000" /d:sonar.token="$(sonarToken)" /d:sonar.projectBaseDir="$(Build.SourcesDirectory)" /d:sonar.sources="mvc-agile-process"
+        dotnet sonarscanner begin /k:"$(sonarProjectKey)" /n:"$(sonarProjectName)" /d:sonar.host.url="http://localhost:9000" /d:sonar.token="$(sonarToken)" /d:sonar.projectBaseDir="$(Build.SourcesDirectory)" /d:sonar.sources="."
       displayName: 'Begin SonarQube Analysis'
       condition: and(succeeded(), ne(variables['sonarToken'], ''))
 
-    # Step 1: Compile project
-    - task: DotNetCoreCLI@2
-      displayName: 'Build the project'
+    # Step 1: Build the project with MSBuild
+    - task: MSBuild@1
+      displayName: 'Compile project using MSBuild'
       inputs:
-        command: 'build'
-        projects: 'mvc-agile-process/mvc-agile-process.csproj'
-        arguments: '--configuration $(buildConfiguration)'
+        solution: '$(solution)'
+        msbuildArchitecture: 'x64'
+        platform: '$(buildPlatform)'
+        configuration: '$(buildConfiguration)'
+        msbuildArguments: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(Build.ArtifactStagingDirectory)"'
+        clean: true
 
-    # Step 2: Run unit tests with code coverage
+    # Step 2: Execute unit tests and collect code coverage data
     - task: DotNetCoreCLI@2
       displayName: 'Run tests with code coverage'
       inputs:
         command: 'test'
-        projects: 'mvc-agile-process/**/*Tests/*.csproj'
-        arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage" --logger:trx'
+        projects: '**/*Tests/*.csproj'
+        arguments: '--configuration $(buildConfiguration) --collect:"XPlat Code Coverage" --logger:trx'
       continueOnError: true
 
-    # Complete SonarQube Analysis
+    # Complete SonarQube analysis after build and tests
     - script: |
         dotnet sonarscanner end /d:sonar.token="$(sonarToken)"
       displayName: 'End SonarQube Analysis'
       condition: and(succeeded(), ne(variables['sonarToken'], ''))
 
-    # Create artifact to be published
-    - task: DotNetCoreCLI@2
-      displayName: 'Publish the project'
-      inputs:
-        command: 'publish'
-        publishWebProjects: false
-        projects: 'mvc-agile-process/mvc-agile-process.csproj'
-        arguments: '--configuration Release --output "$(Build.ArtifactStagingDirectory)"'
-        zipAfterPublish: true
-
-    # Publish artifacts
+    # Publish build artifacts for deployment stages
     - task: PublishBuildArtifacts@1
-      displayName: 'Publish artifacts'
+      displayName: 'Publish build artifacts'
       inputs:
         pathToPublish: '$(Build.ArtifactStagingDirectory)'
         artifactName: 'MvcMovieArtifact'
 
-# DELIVER STAGE
+# DELIVER STAGE - Prepares and releases artifacts
 - stage: Deliver
   displayName: 'Deliver Stage'
   dependsOn: Build
@@ -88,7 +94,7 @@ stages:
   - job: DeliverJob
     displayName: 'Release Artifact'
     steps:
-    # Download the artifact
+    # Download the build artifacts
     - task: DownloadBuildArtifacts@1
       inputs:
         buildType: 'current'
@@ -97,7 +103,7 @@ stages:
         downloadPath: '$(System.ArtifactsDirectory)'
       displayName: 'Download Build Artifacts'
       
-    # Release artifact (simulate registration to a repository)
+    # Simulate artifact registration to a repository
     - script: |
         echo "Releasing artifact to repository"
         echo "Artifact name: MvcMovieArtifact"
@@ -105,7 +111,7 @@ stages:
         echo "Artifact location: $(System.ArtifactsDirectory)"
       displayName: 'Release Artifact'
 
-# DEV ENVIRONMENT
+# DEV ENVIRONMENT - First deployment environment
 - stage: DeployDev
   displayName: 'Deploy to Dev Environment'
   dependsOn: Deliver
@@ -113,6 +119,7 @@ stages:
   - job: DeployDev
     displayName: 'Deploy to Dev'
     steps:
+    # Download the previously released artifacts
     - task: DownloadBuildArtifacts@1
       inputs:
         buildType: 'current'
@@ -121,37 +128,24 @@ stages:
         downloadPath: '$(System.ArtifactsDirectory)'
       displayName: 'Download Artifact'
         
-    - powershell: |
-        Write-Host "Deploying to Dev Environment"
-        Write-Host "Extracting artifact"
-        $artifactPath = "$(System.ArtifactsDirectory)\MvcMovieArtifact"
-        $extractPath = "$(System.ArtifactsDirectory)\webapp"
+    # Extract the application package for Dev environment
+    - task: ExtractFiles@1
+      displayName: 'Extract files for Dev environment'
+      inputs:
+        archiveFilePatterns: '$(System.ArtifactsDirectory)/MvcMovieArtifact/*.zip'
+        destinationFolder: '$(System.ArtifactsDirectory)/webapp'
+        cleanDestinationFolder: true
+        overwriteExistingFiles: true
+      continueOnError: true
         
-        # Create extraction directory if it doesn't exist
-        if (-not (Test-Path $extractPath)) {
-            New-Item -Path $extractPath -ItemType Directory -Force
-        }
-        
-        # Find and extract the zip file
-        $zipFiles = Get-ChildItem -Path $artifactPath -Filter "*.zip"
-        if ($zipFiles.Count -gt 0) {
-            foreach ($zipFile in $zipFiles) {
-                Write-Host "Extracting $($zipFile.FullName) to $extractPath"
-                Expand-Archive -Path $zipFile.FullName -DestinationPath $extractPath -Force
-            }
-        } else {
-            Write-Host "No zip files found in $artifactPath"
-            Get-ChildItem -Path $artifactPath -Recurse | ForEach-Object { Write-Host $_.FullName }
-        }
-      displayName: 'Deploy to Dev'
-        
+    # Start the deployed application in Dev environment
     - script: |
         echo "Launching application in Dev environment"
-        echo "Starting web application from: $(System.ArtifactsDirectory)\webapp"
-        dir "$(System.ArtifactsDirectory)\webapp"
+        echo "Starting web application from: $(System.ArtifactsDirectory)/webapp"
+        dir "$(System.ArtifactsDirectory)/webapp"
       displayName: 'Launch Application'
 
-# QA ENVIRONMENT
+# QA ENVIRONMENT - Quality assurance testing environment
 - stage: DeployQA
   displayName: 'Deploy to QA Environment'
   dependsOn: DeployDev
@@ -159,6 +153,7 @@ stages:
   - job: DeployQA
     displayName: 'Deploy to QA'
     steps:
+    # Download the previously released artifacts
     - task: DownloadBuildArtifacts@1
       inputs:
         buildType: 'current'
@@ -167,31 +162,24 @@ stages:
         downloadPath: '$(System.ArtifactsDirectory)'
       displayName: 'Download Artifact'
         
-    - powershell: |
-        Write-Host "Deploying to QA Environment"
-        Write-Host "Extracting artifact"
-        $artifactPath = "$(System.ArtifactsDirectory)\MvcMovieArtifact"
-        $extractPath = "$(System.ArtifactsDirectory)\webapp-qa"
-        
-        # Create extraction directory if it doesn't exist
-        if (-not (Test-Path $extractPath)) {
-            New-Item -Path $extractPath -ItemType Directory -Force
-        }
-        
-        # Find and extract the zip file
-        $zipFiles = Get-ChildItem -Path $artifactPath -Filter "*.zip"
-        if ($zipFiles.Count -gt 0) {
-            foreach ($zipFile in $zipFiles) {
-                Write-Host "Extracting $($zipFile.FullName) to $extractPath"
-                Expand-Archive -Path $zipFile.FullName -DestinationPath $extractPath -Force
-            }
-        } else {
-            Write-Host "No zip files found in $artifactPath"
-            Get-ChildItem -Path $artifactPath -Recurse | ForEach-Object { Write-Host $_.FullName }
-        }
-      displayName: 'Deploy to QA'
+    # Extract the application package for QA environment
+    - task: ExtractFiles@1
+      displayName: 'Extract files for QA environment'
+      inputs:
+        archiveFilePatterns: '$(System.ArtifactsDirectory)/MvcMovieArtifact/*.zip'
+        destinationFolder: '$(System.ArtifactsDirectory)/webapp-qa'
+        cleanDestinationFolder: true
+        overwriteExistingFiles: true
+      continueOnError: true
+      
+    # Verify QA deployment
+    - script: |
+        echo "QA Deployment completed"
+        echo "Application deployed at: $(System.ArtifactsDirectory)/webapp-qa"
+        dir "$(System.ArtifactsDirectory)/webapp-qa"
+      displayName: 'Verify QA Deployment'
 
-# STAGING ENVIRONMENT
+# STAGING ENVIRONMENT - Pre-production environment
 - stage: DeployStaging
   displayName: 'Deploy to Staging Environment'
   dependsOn: DeployQA
@@ -199,6 +187,7 @@ stages:
   - job: DeployStaging
     displayName: 'Deploy to Staging'
     steps:
+    # Download the previously released artifacts
     - task: DownloadBuildArtifacts@1
       inputs:
         buildType: 'current'
@@ -207,31 +196,24 @@ stages:
         downloadPath: '$(System.ArtifactsDirectory)'
       displayName: 'Download Artifact'
         
-    - powershell: |
-        Write-Host "Deploying to Staging Environment"
-        Write-Host "Extracting artifact"
-        $artifactPath = "$(System.ArtifactsDirectory)\MvcMovieArtifact"
-        $extractPath = "$(System.ArtifactsDirectory)\webapp-staging"
-        
-        # Create extraction directory if it doesn't exist
-        if (-not (Test-Path $extractPath)) {
-            New-Item -Path $extractPath -ItemType Directory -Force
-        }
-        
-        # Find and extract the zip file
-        $zipFiles = Get-ChildItem -Path $artifactPath -Filter "*.zip"
-        if ($zipFiles.Count -gt 0) {
-            foreach ($zipFile in $zipFiles) {
-                Write-Host "Extracting $($zipFile.FullName) to $extractPath"
-                Expand-Archive -Path $zipFile.FullName -DestinationPath $extractPath -Force
-            }
-        } else {
-            Write-Host "No zip files found in $artifactPath"
-            Get-ChildItem -Path $artifactPath -Recurse | ForEach-Object { Write-Host $_.FullName }
-        }
-      displayName: 'Deploy to Staging'
+    # Extract the application package for Staging environment
+    - task: ExtractFiles@1
+      displayName: 'Extract files for Staging environment'
+      inputs:
+        archiveFilePatterns: '$(System.ArtifactsDirectory)/MvcMovieArtifact/*.zip'
+        destinationFolder: '$(System.ArtifactsDirectory)/webapp-staging'
+        cleanDestinationFolder: true
+        overwriteExistingFiles: true
+      continueOnError: true
+      
+    # Verify Staging deployment
+    - script: |
+        echo "Staging Deployment completed"
+        echo "Application deployed at: $(System.ArtifactsDirectory)/webapp-staging"
+        dir "$(System.ArtifactsDirectory)/webapp-staging"
+      displayName: 'Verify Staging Deployment'
 
-# PRODUCTION ENVIRONMENT
+# PRODUCTION ENVIRONMENT - Live environment
 - stage: DeployProduction
   displayName: 'Deploy to Production Environment'
   dependsOn: DeployStaging
@@ -239,6 +221,7 @@ stages:
   - job: DeployProduction
     displayName: 'Deploy to Production'
     steps:
+    # Download the previously released artifacts
     - task: DownloadBuildArtifacts@1
       inputs:
         buildType: 'current'
@@ -247,26 +230,19 @@ stages:
         downloadPath: '$(System.ArtifactsDirectory)'
       displayName: 'Download Artifact'
         
-    - powershell: |
-        Write-Host "Deploying to Production Environment"
-        Write-Host "Extracting artifact"
-        $artifactPath = "$(System.ArtifactsDirectory)\MvcMovieArtifact"
-        $extractPath = "$(System.ArtifactsDirectory)\webapp-prod"
-        
-        # Create extraction directory if it doesn't exist
-        if (-not (Test-Path $extractPath)) {
-            New-Item -Path $extractPath -ItemType Directory -Force
-        }
-        
-        # Find and extract the zip file
-        $zipFiles = Get-ChildItem -Path $artifactPath -Filter "*.zip"
-        if ($zipFiles.Count -gt 0) {
-            foreach ($zipFile in $zipFiles) {
-                Write-Host "Extracting $($zipFile.FullName) to $extractPath"
-                Expand-Archive -Path $zipFile.FullName -DestinationPath $extractPath -Force
-            }
-        } else {
-            Write-Host "No zip files found in $artifactPath"
-            Get-ChildItem -Path $artifactPath -Recurse | ForEach-Object { Write-Host $_.FullName }
-        }
-      displayName: 'Deploy to Production'
+    # Extract the application package for Production environment
+    - task: ExtractFiles@1
+      displayName: 'Extract files for Production environment'
+      inputs:
+        archiveFilePatterns: '$(System.ArtifactsDirectory)/MvcMovieArtifact/*.zip'
+        destinationFolder: '$(System.ArtifactsDirectory)/webapp-prod'
+        cleanDestinationFolder: true
+        overwriteExistingFiles: true
+      continueOnError: true
+      
+    # Verify Production deployment
+    - script: |
+        echo "Production Deployment completed"
+        echo "Application deployed at: $(System.ArtifactsDirectory)/webapp-prod"
+        dir "$(System.ArtifactsDirectory)/webapp-prod"
+      displayName: 'Verify Production Deployment'
