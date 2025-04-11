@@ -36,8 +36,9 @@ stages:
 
     # Begin SonarQube Analysis
     - script: |
-        dotnet sonarscanner begin /k:"$(sonarProjectKey)" /n:"$(sonarProjectName)" /d:sonar.host.url="http://localhost:9000" /d:sonar.login="sqa_842dd2f209226262646e8234b1f5d3aff86d149d" /d:sonar.projectBaseDir="$(Build.SourcesDirectory)" /d:sonar.sources="mvc-agile-process"
+        dotnet sonarscanner begin /k:"$(sonarProjectKey)" /n:"$(sonarProjectName)" /d:sonar.host.url="http://localhost:9000" /d:sonar.token="$(sonarToken)" /d:sonar.projectBaseDir="$(Build.SourcesDirectory)" /d:sonar.sources="mvc-agile-process"
       displayName: 'Begin SonarQube Analysis'
+      condition: and(succeeded(), ne(variables['sonarToken'], ''))
 
     # Step 1: Compile project
     - task: DotNetCoreCLI@2
@@ -58,8 +59,9 @@ stages:
 
     # Complete SonarQube Analysis
     - script: |
-        dotnet sonarscanner end /d:sonar.login="sqa_842dd2f209226262646e8234b1f5d3aff86d149d"
+        dotnet sonarscanner end /d:sonar.token="$(sonarToken)"
       displayName: 'End SonarQube Analysis'
+      condition: and(succeeded(), ne(variables['sonarToken'], ''))
 
     # Create artifact to be published
     - task: DotNetCoreCLI@2
